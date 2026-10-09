@@ -24,6 +24,8 @@ public class MyServerHandler extends ChannelInboundHandlerAdapter {
             }
             System.out.println(ctx.channel().remoteAddress() + "--超时时间--" + eventType);
             System.out.println("服务器做相应处理...");
+        } else {
+            super.userEventTriggered(ctx, evt);
         }
     }
 

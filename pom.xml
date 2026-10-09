@@ -45,6 +45,12 @@
       <artifactId>netty-all</artifactId>
       <version>4.1.138.Final</version>
     </dependency>
+    <dependency>
+    <!-- Maven依赖，运行时真正执行序列化/反序列化 -->
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>4.36.2</version>
+    </dependency>
   </dependencies>
 
   <build>
