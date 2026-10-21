@@ -1,6 +1,6 @@
 package com.demo.netty.rpc;
 
-import java.util.concurrent.Callable;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 
 import cn.hutool.http.HttpStatus;
@@ -10,30 +10,19 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
-@Slf4j (topic = "rpc.RpcClientHandler")
-@Setter 
-@Getter 
-public class RpcClientHandler extends SimpleChannelInboundHandler<ResponsePackage> implements Callable<Object>{
+@Slf4j(topic = "rpc.RpcClientHandler")
+@Setter
+@Getter
+public class RpcClientHandler extends SimpleChannelInboundHandler<ResponsePackage> {
     private ChannelHandlerContext context; // 获取连接通道上下文，方便后续rpc调用
-    private String serviceName;
-    private String methodName;
-    private Object[] args;
-    private CountDownLatch latch;
-    private ResponsePackage responsePackage;
+    private Map<Long, ResultFuture> futureMap;
 
     public RpcClientHandler() {
         this.context = null;
-        this.responsePackage = null;
-        this.latch = null;
     }
 
-    public RpcClientHandler(String serviceName, String methodName, Object[] args) {
-        this.serviceName = serviceName;
-        this.methodName = methodName;
-        this.args = args;
-        this.context = null;
-        this.responsePackage = null;
-        this.latch = null;
+    public RpcClientHandler(Map<Long, ResultFuture> futureMap) {
+        this.futureMap = futureMap;
     }
 
     private final CountDownLatch activeLatch = new CountDownLatch(1);
@@ -47,25 +36,32 @@ public class RpcClientHandler extends SimpleChannelInboundHandler<ResponsePackag
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, ResponsePackage msg) throws Exception {
-        this.responsePackage = msg;
-        if (latch != null) {
-            latch.countDown();
+        long requestId = msg.getRequestId();
+        ResultFuture rf = futureMap.remove(requestId);
+        if (rf != null) {
+            // 必须先塞回响应，再 countDown；否则 await 醒来后 responsePackage 仍是 null
+            rf.setResponsePackage(msg);
+            rf.getLatch().countDown();
         }
     }
 
-    @Override
-    public Object call() throws Exception {
+    public Object call(long requestId) throws Exception {
         log.info("RpcClientHandler call invoke...");
         // 等 channelActive 把 context 设好
         activeLatch.await();
-        latch = new CountDownLatch(1);
-        RequestPackage req = new RequestPackage();
-        req.setServiceName(serviceName);
-        req.setMethodName(methodName);
-        req.setArgs(args);
-        context.writeAndFlush(req);
-        latch.await();
-        // 解析responsePackage
+
+        ResultFuture rf = futureMap.get(requestId);
+        if (rf == null) {
+            throw new RuntimeException("requestId not exist...");
+        }
+
+        context.writeAndFlush(rf.getRequestPackage());
+        rf.getLatch().await();
+
+        String serviceName = rf.getRequestPackage().getServiceName();
+        String methodName = rf.getRequestPackage().getMethodName();
+
+        ResponsePackage responsePackage = rf.getResponsePackage();
         if (responsePackage.getCode() == HttpStatus.HTTP_OK) {
             return responsePackage.getData();
         } else {

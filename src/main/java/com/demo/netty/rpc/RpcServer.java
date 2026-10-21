@@ -50,8 +50,10 @@ public class RpcServer {
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, RequestPackage msg) {
             String service = msg.getServiceName();
+            long requestId = msg.getRequestId();
 
             ResponsePackage resp = new ResponsePackage();
+            resp.setRequestId(requestId);
             if (!RpcServer.this.contains(service)) {
                 resp.setData(null);
                 resp.setCause("service not exist, serviceName: " + service);

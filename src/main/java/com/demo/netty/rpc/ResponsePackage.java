@@ -11,6 +11,7 @@ cause 错误原因
 */
 @Data 
 public class ResponsePackage {
+    private long requestId;
     private Object data;
     private int code;
     private String cause;
